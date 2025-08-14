@@ -55,7 +55,6 @@ h1 {
 canvas#wheel {
   width: var(--wheel-size);
   height: var(--wheel-size);
-
   border-radius: 50%;
 }
 
@@ -83,7 +82,6 @@ button.btn {
   cursor: pointer;
   margin: 5px;
 }
-
 
 #settingContainer {
   display: flex;
@@ -149,8 +147,7 @@ textarea#itemInput {
 </div>
 
 <div id="buttonsContainer">
-  <button id="spinBtn" class="btn">まわす</button>
-  <button id="stopBtn" class="btn">ストップ</button>
+  <button id="toggleSpinBtn" class="btn">まわす</button>
 </div>
 
 <div id="settingContainer">
@@ -158,140 +155,179 @@ textarea#itemInput {
     <textarea id="itemInput" placeholder="項目を改行で入力"></textarea>
     <button id="addBtn" class="btn">追加</button>
     </div>
-
     <div id="itemInputContainerR">
     <ul id="itemList"></ul>
     </div>
 </div>
 
-
 <script>
 (() => {
-  let items = JSON.parse(localStorage.getItem('rouletteItems')) || ["りんご","みかん","バナナ"];
-  let angle=0, velocity=0, spinning=false, stopping=false, resultText="";
-  const FRICTION=0.97, DECAY_THRESHOLD=0.002;
+  let items = JSON.parse(localStorage.getItem('rouletteItems')) || ["りんご", "みかん", "バナナ"];
+  let angle = 0, velocity = 0, spinning = false, stopping = false, resultText = "";
+  let autoStopTimer = null; // 自動停止タイマーのIDを保持する変数
+  const FRICTION = 0.97, DECAY_THRESHOLD = 0.002;
 
-  const wheel=document.getElementById('wheel');
-  const ctx=wheel.getContext('2d');
-  const itemListEl=document.getElementById('itemList');
-  const itemInput=document.getElementById('itemInput');
-  const addBtn=document.getElementById('addBtn');
-  const spinBtn=document.getElementById('spinBtn');
-  const stopBtn=document.getElementById('stopBtn');
+  const wheel = document.getElementById('wheel');
+  const ctx = wheel.getContext('2d');
+  const itemListEl = document.getElementById('itemList');
+  const itemInput = document.getElementById('itemInput');
+  const addBtn = document.getElementById('addBtn');
+  const toggleSpinBtn = document.getElementById('toggleSpinBtn');
 
-  function getSegmentColors(){
+  function getSegmentColors() {
     return getComputedStyle(document.documentElement)
-           .getPropertyValue('--wheel-segment-colors').trim()
-           .split(',').map(s=>s.trim());
+      .getPropertyValue('--wheel-segment-colors').trim()
+      .split(',').map(s => s.trim());
   }
 
-  function saveItems(){ localStorage.setItem('rouletteItems', JSON.stringify(items)); }
-  function addItemsFromInput(){
-    const val=itemInput.value.trim();
-    if(!val) return;
-    const newItems=val.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-    items.push(...newItems); saveAndRefresh(); itemInput.value='';
+  function saveItems() { localStorage.setItem('rouletteItems', JSON.stringify(items)); }
+  function addItemsFromInput() {
+    const val = itemInput.value.trim();
+    if (!val) return;
+    const newItems = val.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    items.push(...newItems); saveAndRefresh(); itemInput.value = '';
   }
-  function deleteItem(index){ items.splice(index,1); saveAndRefresh(); }
-  function saveAndRefresh(){ saveItems(); updateList(); drawWheel(); }
-  function updateList(){
-    itemListEl.innerHTML='';
-    items.forEach((item,index)=>{
-      const li=document.createElement('li'); li.textContent=item;
-      const del=document.createElement('button'); del.textContent='削除';
-      del.onclick=()=>deleteItem(index);
+  function deleteItem(index) { items.splice(index, 1); saveAndRefresh(); }
+  function saveAndRefresh() { saveItems(); updateList(); drawWheel(); }
+  function updateList() {
+    itemListEl.innerHTML = '';
+    items.forEach((item, index) => {
+      const li = document.createElement('li'); li.textContent = item;
+      const del = document.createElement('button'); del.textContent = '削除';
+      del.onclick = () => deleteItem(index);
       li.appendChild(del); itemListEl.appendChild(li);
     });
   }
 
-function drawWheel(highlightIndex = null, flashOn = false) {
-  if (items.length === 0) {
+  function drawWheel(highlightIndex = null, flashOn = false) {
+    if (items.length === 0) {
+      ctx.clearRect(0, 0, wheel.width, wheel.height);
+      return;
+    }
+    const CENTER = wheel.width / 2;
+    const step = (2 * Math.PI) / items.length;
     ctx.clearRect(0, 0, wheel.width, wheel.height);
-    return;
-  }
-  const CENTER = wheel.width / 2;
-  const step = (2 * Math.PI) / items.length;
-  ctx.clearRect(0, 0, wheel.width, wheel.height);
-  const radius = CENTER * 0.9;
+    const radius = CENTER * 0.9;
 
-  const wheelTextSize = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--wheel-text-size')) || 16;
-  const wheelTextColor = getComputedStyle(document.documentElement).getPropertyValue('--wheel-text-color').trim() || '#000';
-  const segmentColors = getSegmentColors();
-  const fontFamily = getComputedStyle(document.documentElement).getPropertyValue('--main-font-family').trim();
+    const wheelTextSize = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--wheel-text-size')) || 16;
+    const wheelTextColor = getComputedStyle(document.documentElement).getPropertyValue('--wheel-text-color').trim() || '#000';
+    const segmentColors = getSegmentColors();
+    const fontFamily = getComputedStyle(document.documentElement).getPropertyValue('--main-font-family').trim();
 
-  items.forEach((item, i) => {
-    // 扇形の描画
+    items.forEach((item, i) => {
+      ctx.beginPath();
+      ctx.moveTo(CENTER, CENTER);
+      ctx.arc(CENTER, CENTER, radius, step * i + angle, step * (i + 1) + angle);
+      ctx.fillStyle = (highlightIndex === i && flashOn) ? "yellow" : segmentColors[i % segmentColors.length];
+      ctx.fill();
+
+      const midAngle = step * i + step / 2 + angle;
+      const rText = radius * 0.75;
+      const x = CENTER + Math.cos(midAngle) * rText;
+      const y = CENTER + Math.sin(midAngle) * rText;
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(midAngle);
+      ctx.font = `${wheelTextSize}px ${fontFamily}`;
+      ctx.fillStyle = wheelTextColor;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(item, 0, 0);
+      ctx.restore();
+    });
+
+    const centerRadius = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--center-circle-radius')) || 60;
+    const centerColor = getComputedStyle(document.documentElement).getPropertyValue('--center-circle-color').trim() || "#fff";
+    const centerTextColor = getComputedStyle(document.documentElement).getPropertyValue('--center-text-color').trim() || "#000";
+    const centerTextSize = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--center-text-size')) || 18;
+
     ctx.beginPath();
-    ctx.moveTo(CENTER, CENTER);
-    ctx.arc(CENTER, CENTER, radius, step * i + angle, step * (i + 1) + angle);
-    ctx.fillStyle = (highlightIndex === i && flashOn) ? "yellow" : segmentColors[i % segmentColors.length];
+    ctx.arc(CENTER, CENTER, centerRadius, 0, 2 * Math.PI);
+    ctx.fillStyle = centerColor;
     ctx.fill();
 
-    // 文字配置
-    const midAngle = step * i + step / 2 + angle;
-    const rText = radius * 0.75; // 文字を配置する距離
-    const x = CENTER + Math.cos(midAngle) * rText;
-    const y = CENTER + Math.sin(midAngle) * rText;
-
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(midAngle); // 横向きに回転
-    ctx.font = `${wheelTextSize}px ${fontFamily}`;
-    ctx.fillStyle = wheelTextColor;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(item, 0, 0); // 横書きで配置
-    ctx.restore();
-  });
-
-  // 中心サークルの描画
-  const centerRadius = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--center-circle-radius')) || 60;
-  const centerColor = getComputedStyle(document.documentElement).getPropertyValue('--center-circle-color').trim() || "#fff";
-  const centerTextColor = getComputedStyle(document.documentElement).getPropertyValue('--center-text-color').trim() || "#000";
-  const centerTextSize = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--center-text-size')) || 18;
-
-  ctx.beginPath();
-  ctx.arc(CENTER, CENTER, centerRadius, 0, 2 * Math.PI);
-  ctx.fillStyle = centerColor;
-  ctx.fill();
-
-  if (resultText) {
-    ctx.font = `${centerTextSize}px ${fontFamily}`;
-    ctx.fillStyle = centerTextColor;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(resultText, CENTER, CENTER);
+    if (resultText) {
+      ctx.font = `${centerTextSize}px ${fontFamily}`;
+      ctx.fillStyle = centerTextColor;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(resultText, CENTER, CENTER);
+    }
   }
-}
 
+  function spin() {
+    if (spinning) return;
+    velocity = 0.3 + Math.random() * 0.2;
+    spinning = true;
+    stopping = false;
+    resultText = "";
+    toggleSpinBtn.textContent = 'ストップ';
+    
+    // 10秒後に自動で停止処理を開始
+    autoStopTimer = setTimeout(stop, 6000); 
 
-
-  function spin(){ if(spinning) return; velocity=0.3+Math.random()*0.2; spinning=true; stopping=false; resultText=""; animateSpin(); }
-  function animateSpin(){
-    if(!spinning) return;
-    angle+=velocity;
-    if(stopping){ velocity*=FRICTION; if(Math.abs(velocity)<DECAY_THRESHOLD){ velocity=0; spinning=false; determineResult(); return; } }
-    drawWheel(); requestAnimationFrame(animateSpin);
+    animateSpin();
   }
-  function stop(){ if(!spinning) return; stopping=true; }
-  function determineResult(){
-    const step=(2*Math.PI)/items.length;
-    let adjustedAngle=(2*Math.PI-(angle%(2*Math.PI)))%(2*Math.PI);
-    const selectedIndex=Math.floor(adjustedAngle/step)%items.length;
-    resultText=items[selectedIndex]; flashEffect(selectedIndex);
+
+  function animateSpin() {
+    if (!spinning) return;
+    angle += velocity;
+    if (stopping) {
+      velocity *= FRICTION;
+      if (Math.abs(velocity) < DECAY_THRESHOLD) {
+        velocity = 0;
+        spinning = false;
+        determineResult();
+        return;
+      }
+    }
+    drawWheel();
+    requestAnimationFrame(animateSpin);
   }
-  function flashEffect(index){
-    let flashCount=0;
-    const interval=setInterval(()=>{ flashCount++; drawWheel(index,flashCount%2===0); if(flashCount>6){ clearInterval(interval); drawWheel(); } },200);
+
+  function stop() {
+    // 既にセットされている自動停止タイマーを解除
+    if (autoStopTimer) clearTimeout(autoStopTimer);
+    if (!spinning || stopping) return;
+    stopping = true;
+  }
+
+  function determineResult() {
+    const step = (2 * Math.PI) / items.length;
+    let adjustedAngle = (2 * Math.PI - (angle % (2 * Math.PI))) % (2 * Math.PI);
+    const selectedIndex = Math.floor(adjustedAngle / step) % items.length;
+    resultText = items[selectedIndex];
+    flashEffect(selectedIndex);
+  }
+
+  function flashEffect(index) {
+    let flashCount = 0;
+    const interval = setInterval(() => {
+      flashCount++;
+      drawWheel(index, flashCount % 2 === 0);
+      if (flashCount > 6) {
+        clearInterval(interval);
+        drawWheel();
+        toggleSpinBtn.textContent = 'まわす';
+      }
+    }, 200);
   }
 
   addBtn.addEventListener('click', addItemsFromInput);
-  spinBtn.addEventListener('click', spin);
-  stopBtn.addEventListener('click', stop);
 
-  wheel.width=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--wheel-size'));
-  wheel.height=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--wheel-size'));
-  updateList(); drawWheel();
+  toggleSpinBtn.addEventListener('click', () => {
+    if (!spinning) {
+      spin();
+    } else {
+      stop();
+    }
+  });
+
+  wheel.width = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--wheel-size'));
+  wheel.height = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--wheel-size'));
+  updateList();
+  drawWheel();
 })();
 </script>
 
