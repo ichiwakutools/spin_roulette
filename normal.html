@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>ルーレット配置変更版</title>
+<link href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --main-font-family: 'Comic Neue', cursive, sans-serif;
+  --title-font-size: 36px;
+  --title-color: #333;
+  --wheel-size: 400px;
+  --wheel-text-size: 16px;
+  --wheel-text-color: #414141;
+  --wheel-segment-colors: #ffcabf,#ffff80,#d8f255,#bfe4ff,#ffca80,#77d9a8,#c9ace6;
+  --center-circle-radius: 60px;
+  --center-circle-color: #fff;
+  --center-text-color: #000;
+  --center-text-size: 20px;
+  --arrow-size: 40px;
+  --arrow-offset-x: 10px;
+  --arrow-offset-y: -50%;
+  --button-bg: #77d9a8;
+  --button-color: #fff;
+  --button-padding: 8px 16px;
+  --textarea-width: 250px;
+  --textarea-height: 100px;
+  --list-width: 200px;
+  --list-item-margin: 5px 0;
+  --list-button-bg: #949494;
+  --list-button-color: #ffffff;
+}
+
+body {
+  font-family: var(--main-font-family);
+  margin: 50px ; padding: 0;
+  position: relative;
+  height: 100vh;
+}
+
+h1 {
+  text-align: center;
+  font-size: var(--title-font-size);
+  color: var(--title-color);
+  margin: 20px 0;
+}
+
+#wheelContainer {
+  width: var(--wheel-size);
+  height: var(--wheel-size);
+  margin: 0 auto;
+  position: relative;
+}
+
+canvas#wheel {
+  width: var(--wheel-size);
+  height: var(--wheel-size);
+
+  border-radius: 50%;
+}
+
+#pointer {
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  width: var(--arrow-size);
+  height: var(--arrow-size);
+  transform: translate(var(--arrow-offset-x), var(--arrow-offset-y));
+  pointer-events: none;
+}
+
+#buttonsContainer {
+  text-align: center;
+  margin-top: 10px;
+}
+
+button.btn {
+  background-color: var(--button-bg);
+  color: var(--button-color);
+  border: none;
+  border-radius: 4px;
+  padding: var(--button-padding);
+  cursor: pointer;
+  margin: 5px;
+}
+
+
+#settingContainer {
+  display: flex;
+  justify-content: center; 
+  margin: 100px 0;
+}
+
+#itemInputContainer {
+  width: 300px; /* 各コンテナの幅 */
+  margin: 0 auto; /* 左右中央寄せ */
+  text-align: center; /* テキストを中央寄せ */
+  /* 必要に応じて、背景色やボーダーなどを追加 */
+}
+
+textarea#itemInput {
+  width: var(--textarea-width);
+  height: var(--textarea-height);
+  font-size: 14px;
+  padding: 5px;
+}
+
+#addBtn {
+  display: block;
+  margin-top: 5px;
+  margin-right: 5px;
+  margin-left: auto;
+}
+
+#itemList {
+  position: absolute;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+#itemList li {
+  margin: var(--list-item-margin);
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+#itemList li button {
+  background-color: var(--list-button-bg);
+  color: var(--list-button-color);
+  border: none;
+  border-radius: 4px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<h1>ルーレット</h1>
+
+<div id="wheelContainer">
+  <canvas id="wheel"></canvas>
+  <img id="pointer" src="arrow.png" alt="矢印">
+</div>
+
+<div id="buttonsContainer">
+  <button id="spinBtn" class="btn">まわす</button>
+  <button id="stopBtn" class="btn">ストップ</button>
+</div>
+
+<div id="settingContainer">
+    <div id="itemInputContainer">
+    <textarea id="itemInput" placeholder="項目を改行で入力"></textarea>
+    <button id="addBtn" class="btn">追加</button>
+    </div>
+
+    <div id="itemInputContainer">
+    <ul id="itemList"></ul>
+    </div>
+</div>
+
+
+<script>
+(() => {
+  let items = JSON.parse(localStorage.getItem('rouletteItems')) || ["りんご","みかん","バナナ"];
+  let angle=0, velocity=0, spinning=false, stopping=false, resultText="";
+  const FRICTION=0.97, DECAY_THRESHOLD=0.002;
+
+  const wheel=document.getElementById('wheel');
+  const ctx=wheel.getContext('2d');
+  const itemListEl=document.getElementById('itemList');
+  const itemInput=document.getElementById('itemInput');
+  const addBtn=document.getElementById('addBtn');
+  const spinBtn=document.getElementById('spinBtn');
+  const stopBtn=document.getElementById('stopBtn');
+
+  function getSegmentColors(){
+    return getComputedStyle(document.documentElement)
+           .getPropertyValue('--wheel-segment-colors').trim()
+           .split(',').map(s=>s.trim());
+  }
+
+  function saveItems(){ localStorage.setItem('rouletteItems', JSON.stringify(items)); }
+  function addItemsFromInput(){
+    const val=itemInput.value.trim();
+    if(!val) return;
+    const newItems=val.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+    items.push(...newItems); saveAndRefresh(); itemInput.value='';
+  }
+  function deleteItem(index){ items.splice(index,1); saveAndRefresh(); }
+  function saveAndRefresh(){ saveItems(); updateList(); drawWheel(); }
+  function updateList(){
+    itemListEl.innerHTML='';
+    items.forEach((item,index)=>{
+      const li=document.createElement('li'); li.textContent=item;
+      const del=document.createElement('button'); del.textContent='削除';
+      del.onclick=()=>deleteItem(index);
+      li.appendChild(del); itemListEl.appendChild(li);
+    });
+  }
+
+function drawWheel(highlightIndex = null, flashOn = false) {
+  if (items.length === 0) {
+    ctx.clearRect(0, 0, wheel.width, wheel.height);
+    return;
+  }
+  const CENTER = wheel.width / 2;
+  const step = (2 * Math.PI) / items.length;
+  ctx.clearRect(0, 0, wheel.width, wheel.height);
+  const radius = CENTER * 0.9;
+
+  const wheelTextSize = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--wheel-text-size')) || 16;
+  const wheelTextColor = getComputedStyle(document.documentElement).getPropertyValue('--wheel-text-color').trim() || '#000';
+  const segmentColors = getSegmentColors();
+  const fontFamily = getComputedStyle(document.documentElement).getPropertyValue('--main-font-family').trim();
+
+  items.forEach((item, i) => {
+    // 扇形の描画
+    ctx.beginPath();
+    ctx.moveTo(CENTER, CENTER);
+    ctx.arc(CENTER, CENTER, radius, step * i + angle, step * (i + 1) + angle);
+    ctx.fillStyle = (highlightIndex === i && flashOn) ? "yellow" : segmentColors[i % segmentColors.length];
+    ctx.fill();
+
+    // 文字配置
+    const midAngle = step * i + step / 2 + angle;
+    const rText = radius * 0.75; // 文字を配置する距離
+    const x = CENTER + Math.cos(midAngle) * rText;
+    const y = CENTER + Math.sin(midAngle) * rText;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(midAngle); // 横向きに回転
+    ctx.font = `${wheelTextSize}px ${fontFamily}`;
+    ctx.fillStyle = wheelTextColor;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(item, 0, 0); // 横書きで配置
+    ctx.restore();
+  });
+
+  // 中心サークルの描画
+  const centerRadius = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--center-circle-radius')) || 60;
+  const centerColor = getComputedStyle(document.documentElement).getPropertyValue('--center-circle-color').trim() || "#fff";
+  const centerTextColor = getComputedStyle(document.documentElement).getPropertyValue('--center-text-color').trim() || "#000";
+  const centerTextSize = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--center-text-size')) || 18;
+
+  ctx.beginPath();
+  ctx.arc(CENTER, CENTER, centerRadius, 0, 2 * Math.PI);
+  ctx.fillStyle = centerColor;
+  ctx.fill();
+
+  if (resultText) {
+    ctx.font = `${centerTextSize}px ${fontFamily}`;
+    ctx.fillStyle = centerTextColor;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(resultText, CENTER, CENTER);
+  }
+}
+
+
+
+  function spin(){ if(spinning) return; velocity=0.3+Math.random()*0.2; spinning=true; stopping=false; resultText=""; animateSpin(); }
+  function animateSpin(){
+    if(!spinning) return;
+    angle+=velocity;
+    if(stopping){ velocity*=FRICTION; if(Math.abs(velocity)<DECAY_THRESHOLD){ velocity=0; spinning=false; determineResult(); return; } }
+    drawWheel(); requestAnimationFrame(animateSpin);
+  }
+  function stop(){ if(!spinning) return; stopping=true; }
+  function determineResult(){
+    const step=(2*Math.PI)/items.length;
+    let adjustedAngle=(2*Math.PI-(angle%(2*Math.PI)))%(2*Math.PI);
+    const selectedIndex=Math.floor(adjustedAngle/step)%items.length;
+    resultText=items[selectedIndex]; flashEffect(selectedIndex);
+  }
+  function flashEffect(index){
+    let flashCount=0;
+    const interval=setInterval(()=>{ flashCount++; drawWheel(index,flashCount%2===0); if(flashCount>6){ clearInterval(interval); drawWheel(); } },200);
+  }
+
+  addBtn.addEventListener('click', addItemsFromInput);
+  spinBtn.addEventListener('click', spin);
+  stopBtn.addEventListener('click', stop);
+
+  wheel.width=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--wheel-size'));
+  wheel.height=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--wheel-size'));
+  updateList(); drawWheel();
+})();
+</script>
+
+</body>
+</html>
