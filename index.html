@@ -9,16 +9,16 @@
   --main-font-family: 'Comic Neue', cursive, sans-serif;
   --title-font-size: 36px;
   --title-color: #333;
-  --wheel-size: 400px;
-  --wheel-text-size: 16px;
-  --wheel-text-color: #414141;
+  --wheel-size: 500px;
+  --wheel-text-size: 24px;
+  --wheel-text-color: #333333;
   --wheel-segment-colors: #ffcabf,#ffff80,#d8f255,#bfe4ff,#ffca80,#77d9a8,#c9ace6;
-  --center-circle-radius: 60px;
+  --center-circle-radius: 80px;
   --center-circle-color: #fff;
-  --center-text-color: #000;
-  --center-text-size: 20px;
-  --arrow-size: 40px;
-  --arrow-offset-x: 10px;
+  --center-text-color: #242424;
+  --center-text-size: 40px;
+  --arrow-size: 35px;
+  --arrow-offset-x: 5px;
   --arrow-offset-y: -50%;
   --button-bg: #77d9a8;
   --button-color: #fff;
@@ -91,11 +91,14 @@ button.btn {
   margin: 100px 0;
 }
 
-#itemInputContainer {
-  width: 300px; /* 各コンテナの幅 */
-  margin: 0 auto; /* 左右中央寄せ */
-  text-align: center; /* テキストを中央寄せ */
-  /* 必要に応じて、背景色やボーダーなどを追加 */
+#itemInputContainerL {
+  width: 260px; /* 各コンテナの幅 */
+  margin: 0 20px 0 0; /* 左右中央寄せ */
+}
+
+#itemInputContainerR {
+  width: 260px; /* 各コンテナの幅 */
+  margin: 0 0 0 20px; /* 左右中央寄せ */
 }
 
 textarea#itemInput {
@@ -151,12 +154,12 @@ textarea#itemInput {
 </div>
 
 <div id="settingContainer">
-    <div id="itemInputContainer">
+    <div id="itemInputContainerL">
     <textarea id="itemInput" placeholder="項目を改行で入力"></textarea>
     <button id="addBtn" class="btn">追加</button>
     </div>
 
-    <div id="itemInputContainer">
+    <div id="itemInputContainerR">
     <ul id="itemList"></ul>
     </div>
 </div>
