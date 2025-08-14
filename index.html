@@ -9,7 +9,7 @@
   --main-font-family: 'Comic Neue', cursive, sans-serif;
   --title-font-size: 36px;
   --title-color: #333;
-  --wheel-size: 500px;
+  --wheel-size: 600px;
   --wheel-text-size: 24px;
   --wheel-text-color: #333333;
   --wheel-segment-colors: #ffcabf,#ffff80,#d8f255,#bfe4ff,#ffca80,#77d9a8,#c9ace6;
@@ -44,6 +44,24 @@ h1 {
   color: var(--title-color);
   margin: 20px 0;
 }
+
+#mainContainer {
+  display: flex;
+  margin: 0 auto;
+  position: relative;
+}
+
+#leftContainer {
+  margin: 0 auto;
+  position: relative;
+}
+
+#rightContainer {
+  width: 300px;
+  margin: 0 auto;
+  position: relative;
+}
+
 
 #wheelContainer {
   width: var(--wheel-size);
@@ -82,21 +100,27 @@ button.btn {
   cursor: pointer;
   margin: 5px;
 }
+/* ボタンが無効な時のスタイル */
+button.btn:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
 
 #settingContainer {
-  display: flex;
   justify-content: center; 
-  margin: 100px 0;
+  margin: 100px auto;
+  width: 300px;
 }
 
-#itemInputContainerL {
-  width: 260px; /* 各コンテナの幅 */
-  margin: 0 20px 0 0; /* 左右中央寄せ */
+#itemInputContainerT {
+  width: 260px;
+  margin: 50px auto;
 }
 
-#itemInputContainerR {
-  width: 260px; /* 各コンテナの幅 */
-  margin: 0 0 0 20px; /* 左右中央寄せ */
+#itemInputContainerB {
+  width: 260px;
+  margin: 50px auto;
 }
 
 textarea#itemInput {
@@ -139,24 +163,30 @@ textarea#itemInput {
 </head>
 <body>
 
-<h1>ルーレット</h1>
+<div id="mainContainer">
+    <div id="leftContainer">
+        <h1>ルーレット</h1>
 
-<div id="wheelContainer">
-  <canvas id="wheel"></canvas>
-  <img id="pointer" src="arrow.png" alt="矢印">
-</div>
+        <div id="wheelContainer">
+        <canvas id="wheel"></canvas>
+        <img id="pointer" src="arrow.png" alt="矢印">
+        </div>
 
-<div id="buttonsContainer">
-  <button id="toggleSpinBtn" class="btn">まわす</button>
-</div>
-
-<div id="settingContainer">
-    <div id="itemInputContainerL">
-    <textarea id="itemInput" placeholder="項目を改行で入力"></textarea>
-    <button id="addBtn" class="btn">追加</button>
+        <div id="buttonsContainer">
+        <button id="spinBtn" class="btn">まわす</button>
+        </div>
     </div>
-    <div id="itemInputContainerR">
-    <ul id="itemList"></ul>
+
+    <div id="rightContainer">
+        <div id="settingContainer">
+            <div id="itemInputContainerT">
+            <textarea id="itemInput" placeholder="項目を改行で入力"></textarea>
+            <button id="addBtn" class="btn">追加</button>
+            </div>
+            <div id="itemInputContainerB">
+            <ul id="itemList"></ul>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -164,15 +194,24 @@ textarea#itemInput {
 (() => {
   let items = JSON.parse(localStorage.getItem('rouletteItems')) || ["りんご", "みかん", "バナナ"];
   let angle = 0, velocity = 0, spinning = false, stopping = false, resultText = "";
-  let autoStopTimer = null; // 自動停止タイマーのIDを保持する変数
   const FRICTION = 0.97, DECAY_THRESHOLD = 0.002;
+
+  // --- サウンドファイルの準備 ---
+  // 下の3つの音声ファイル（spinning.mp3, slowing.mp3, win.mp3）を
+  // このHTMLファイルと同じ場所に置いてください。
+  const spinningSound = new Audio('spinning.mp3');
+  spinningSound.loop = true;
+  const slowingSound = new Audio('slowing.mp3');
+  slowingSound.loop = true;
+  const winSound = new Audio('win.mp3');
+  // ---
 
   const wheel = document.getElementById('wheel');
   const ctx = wheel.getContext('2d');
   const itemListEl = document.getElementById('itemList');
   const itemInput = document.getElementById('itemInput');
   const addBtn = document.getElementById('addBtn');
-  const toggleSpinBtn = document.getElementById('toggleSpinBtn');
+  const spinBtn = document.getElementById('spinBtn');
 
   function getSegmentColors() {
     return getComputedStyle(document.documentElement)
@@ -218,7 +257,7 @@ textarea#itemInput {
       ctx.beginPath();
       ctx.moveTo(CENTER, CENTER);
       ctx.arc(CENTER, CENTER, radius, step * i + angle, step * (i + 1) + angle);
-      ctx.fillStyle = (highlightIndex === i && flashOn) ? "yellow" : segmentColors[i % segmentColors.length];
+      ctx.fillStyle = (highlightIndex === i && flashOn) ? "white" : segmentColors[i % segmentColors.length];
       ctx.fill();
 
       const midAngle = step * i + step / 2 + angle;
@@ -255,17 +294,27 @@ textarea#itemInput {
       ctx.fillText(resultText, CENTER, CENTER);
     }
   }
+  
+  function stop() {
+      spinningSound.pause();
+      spinningSound.currentTime = 0;
+      slowingSound.play();
+      stopping = true;
+  }
 
   function spin() {
     if (spinning) return;
+
+    spinBtn.disabled = true; // ボタンを無効化
+    spinningSound.play(); // 回転音を再生
+
     velocity = 0.3 + Math.random() * 0.2;
     spinning = true;
     stopping = false;
     resultText = "";
-    toggleSpinBtn.textContent = 'ストップ';
     
-    // 10秒後に自動で停止処理を開始
-    autoStopTimer = setTimeout(stop, 6000); 
+    // 5秒後に停止処理を開始
+    setTimeout(stop, 5000); 
 
     animateSpin();
   }
@@ -286,14 +335,11 @@ textarea#itemInput {
     requestAnimationFrame(animateSpin);
   }
 
-  function stop() {
-    // 既にセットされている自動停止タイマーを解除
-    if (autoStopTimer) clearTimeout(autoStopTimer);
-    if (!spinning || stopping) return;
-    stopping = true;
-  }
-
   function determineResult() {
+    slowingSound.pause();
+    slowingSound.currentTime = 0;
+    winSound.play(); // 当たり音を再生
+
     const step = (2 * Math.PI) / items.length;
     let adjustedAngle = (2 * Math.PI - (angle % (2 * Math.PI))) % (2 * Math.PI);
     const selectedIndex = Math.floor(adjustedAngle / step) % items.length;
@@ -309,20 +355,13 @@ textarea#itemInput {
       if (flashCount > 6) {
         clearInterval(interval);
         drawWheel();
-        toggleSpinBtn.textContent = 'まわす';
+        spinBtn.disabled = false; // ボタンを有効化
       }
     }, 200);
   }
 
   addBtn.addEventListener('click', addItemsFromInput);
-
-  toggleSpinBtn.addEventListener('click', () => {
-    if (!spinning) {
-      spin();
-    } else {
-      stop();
-    }
-  });
+  spinBtn.addEventListener('click', spin);
 
   wheel.width = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--wheel-size'));
   wheel.height = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--wheel-size'));
