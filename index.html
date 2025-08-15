@@ -18,7 +18,7 @@
   --center-text-color: #242424;
   --center-text-size: 40px;
   --arrow-size: 35px;
-  --arrow-offset-x: 5px;
+  --arrow-offset-x: -30px;
   --arrow-offset-y: -50%;
   --button-bg: #77d9a8;
   --button-color: #fff;
@@ -29,53 +29,49 @@
   --list-item-margin: 5px 0;
   --list-button-bg: #949494;
   --list-button-color: #ffffff;
-}
 
+  /* まわすボタン専用 */
+  --spin-button-font-size: 24px;
+  --spin-button-padding: 12px 24px;
+}
 body {
   font-family: var(--main-font-family);
-  margin: 50px ; padding: 0;
+  margin: 50px ;
+  padding: 0;
   position: relative;
   height: 100vh;
 }
-
 h1 {
   text-align: center;
   font-size: var(--title-font-size);
   color: var(--title-color);
-  margin: 20px 0;
+  margin: 0;
 }
-
 #mainContainer {
   display: flex;
   margin: 0 auto;
   position: relative;
 }
-
 #leftContainer {
   margin: 0 auto;
   position: relative;
 }
-
 #rightContainer {
   width: 300px;
   margin: 0 auto;
   position: relative;
 }
-
-
 #wheelContainer {
   width: var(--wheel-size);
   height: var(--wheel-size);
   margin: 0 auto;
   position: relative;
 }
-
 canvas#wheel {
   width: var(--wheel-size);
   height: var(--wheel-size);
   border-radius: 50%;
 }
-
 #pointer {
   position: absolute;
   top: 50%;
@@ -85,12 +81,11 @@ canvas#wheel {
   transform: translate(var(--arrow-offset-x), var(--arrow-offset-y));
   pointer-events: none;
 }
-
 #buttonsContainer {
   text-align: center;
-  margin-top: 10px;
+  width: 600px;
+  height: 100px;
 }
-
 button.btn {
   background-color: var(--button-bg);
   color: var(--button-color);
@@ -100,57 +95,61 @@ button.btn {
   cursor: pointer;
   margin: 5px;
 }
-/* ボタンが無効な時のスタイル */
+button#spinBtn {
+  font-size: var(--spin-button-font-size);
+  padding: var(--spin-button-padding);
+}
 button.btn:disabled {
-    background-color: #cccccc;
-    cursor: not-allowed;
+  background-color: #cccccc;
+  cursor: not-allowed;
 }
 
+/* 当たったものを削除ボタン */
+#deleteModeBtn {
+  position: absolute;
+  right: 0;
+  background-color: #ff9999;
+}
+#deleteModeBtn:enabled {
+  background-color: #ff4444;
+}
 
 #settingContainer {
-  justify-content: center; 
-  margin: 100px auto;
+  justify-content: center;
+  margin: 50px auto;
   width: 300px;
 }
-
 #itemInputContainerT {
   width: 260px;
-  margin: 50px auto;
+  margin: 20px auto;
 }
-
 #itemInputContainerB {
   width: 260px;
-  margin: 50px auto;
+  margin: 20px auto;
 }
-
 textarea#itemInput {
   width: var(--textarea-width);
   height: var(--textarea-height);
   font-size: 14px;
   padding: 5px;
 }
-
 #addBtn {
   display: block;
   margin-top: 5px;
   margin-right: 5px;
   margin-left: auto;
 }
-
 #itemList {
-  position: absolute;
   list-style: none;
   padding: 0;
   margin: 0;
 }
-
 #itemList li {
   margin: var(--list-item-margin);
   display: flex;
   justify-content: space-between;
   font-size: 14px;
 }
-
 #itemList li button {
   background-color: var(--list-button-bg);
   color: var(--list-button-color);
@@ -159,32 +158,56 @@ textarea#itemInput {
   padding: 2px 6px;
   cursor: pointer;
 }
+
+/* 履歴リスト */
+#historyContainer {
+  margin-top: 20px;
+  text-align: center;
+}
+#historyContainer h2 {
+  font-size: 18px;
+  margin-bottom: 5px;
+}
+#historyList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 150px;
+  overflow-y: auto;
+  border: 1px solid #ccc;
+}
+#historyList li {
+  padding: 3px 5px;
+  border-bottom: 1px solid #eee;
+  font-size: 14px;
+}
 </style>
 </head>
 <body>
-
 <div id="mainContainer">
     <div id="leftContainer">
         <h1>ルーレット</h1>
-
         <div id="wheelContainer">
-        <canvas id="wheel"></canvas>
-        <img id="pointer" src="arrow.png" alt="矢印">
+            <canvas id="wheel"></canvas>
+            <img id="pointer" src="arrow.png" alt="矢印">
         </div>
-
         <div id="buttonsContainer">
-        <button id="spinBtn" class="btn">まわす</button>
+            <button id="spinBtn" class="btn">まわす</button>
+            <button id="deleteModeBtn" class="btn" disabled>当たったものを削除</button>
+        </div>
+        <div id="historyContainer">
+            <h2>当選履歴</h2>
+            <ul id="historyList"></ul>
         </div>
     </div>
-
     <div id="rightContainer">
         <div id="settingContainer">
-            <div id="itemInputContainerT">
-            <textarea id="itemInput" placeholder="項目を改行で入力"></textarea>
-            <button id="addBtn" class="btn">追加</button>
-            </div>
+            <button id="resetBtn" class="btn">初期値にリセット</button>
+                <div id="itemInputContainerT"></div>
+                <textarea id="itemInput" placeholder="項目を改行で入力"></textarea>
+                <button id="addBtn" class="btn">追加</button>
             <div id="itemInputContainerB">
-            <ul id="itemList"></ul>
+                <ul id="itemList"></ul>
             </div>
         </div>
     </div>
@@ -193,33 +216,57 @@ textarea#itemInput {
 <script>
 (() => {
   let items = JSON.parse(localStorage.getItem('rouletteItems')) || ["りんご", "みかん", "バナナ"];
+  let history = JSON.parse(localStorage.getItem('rouletteHistory')) || [];
   let angle = 0, velocity = 0, spinning = false, stopping = false, resultText = "";
+  let selectedIndex = null;
   const FRICTION = 0.97, DECAY_THRESHOLD = 0.002;
 
-  // --- サウンドファイルの準備 ---
-  // 下の3つの音声ファイル（spinning.mp3, slowing.mp3, win.mp3）を
-  // このHTMLファイルと同じ場所に置いてください。
   const spinningSound = new Audio('spinning.mp3');
   spinningSound.loop = true;
   const slowingSound = new Audio('slowing.mp3');
   slowingSound.loop = true;
   const winSound = new Audio('win.mp3');
-  // ---
 
   const wheel = document.getElementById('wheel');
   const ctx = wheel.getContext('2d');
   const itemListEl = document.getElementById('itemList');
+  const historyListEl = document.getElementById('historyList');
   const itemInput = document.getElementById('itemInput');
   const addBtn = document.getElementById('addBtn');
   const spinBtn = document.getElementById('spinBtn');
+  const deleteModeBtn = document.getElementById('deleteModeBtn');
+  const resetBtn = document.getElementById('resetBtn');
+
+  deleteModeBtn.disabled = true;
+
+  deleteModeBtn.addEventListener('click', () => {
+    if (selectedIndex !== null && items[selectedIndex]) {
+      items.splice(selectedIndex, 1);
+      saveAndRefresh();
+      resultText = "";
+      selectedIndex = null;
+      deleteModeBtn.disabled = true;
+      drawWheel();
+    }
+  });
+
+  resetBtn.addEventListener('click', () => {
+    items = ["りんご", "みかん", "バナナ"];
+    history = [];
+    resultText = "";
+    selectedIndex = null;
+    deleteModeBtn.disabled = true;
+    saveAndRefresh();
+    updateHistory();
+  });
 
   function getSegmentColors() {
     return getComputedStyle(document.documentElement)
       .getPropertyValue('--wheel-segment-colors').trim()
       .split(',').map(s => s.trim());
   }
-
   function saveItems() { localStorage.setItem('rouletteItems', JSON.stringify(items)); }
+  function saveHistory() { localStorage.setItem('rouletteHistory', JSON.stringify(history)); }
   function addItemsFromInput() {
     const val = itemInput.value.trim();
     if (!val) return;
@@ -237,7 +284,14 @@ textarea#itemInput {
       li.appendChild(del); itemListEl.appendChild(li);
     });
   }
-
+  function updateHistory() {
+    historyListEl.innerHTML = '';
+    history.forEach(h => {
+      const li = document.createElement('li');
+      li.textContent = h;
+      historyListEl.appendChild(li);
+    });
+  }
   function drawWheel(highlightIndex = null, flashOn = false) {
     if (items.length === 0) {
       ctx.clearRect(0, 0, wheel.width, wheel.height);
@@ -247,24 +301,20 @@ textarea#itemInput {
     const step = (2 * Math.PI) / items.length;
     ctx.clearRect(0, 0, wheel.width, wheel.height);
     const radius = CENTER * 0.9;
-
     const wheelTextSize = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--wheel-text-size')) || 16;
     const wheelTextColor = getComputedStyle(document.documentElement).getPropertyValue('--wheel-text-color').trim() || '#000';
     const segmentColors = getSegmentColors();
     const fontFamily = getComputedStyle(document.documentElement).getPropertyValue('--main-font-family').trim();
-
     items.forEach((item, i) => {
       ctx.beginPath();
       ctx.moveTo(CENTER, CENTER);
       ctx.arc(CENTER, CENTER, radius, step * i + angle, step * (i + 1) + angle);
       ctx.fillStyle = (highlightIndex === i && flashOn) ? "white" : segmentColors[i % segmentColors.length];
       ctx.fill();
-
       const midAngle = step * i + step / 2 + angle;
       const rText = radius * 0.75;
       const x = CENTER + Math.cos(midAngle) * rText;
       const y = CENTER + Math.sin(midAngle) * rText;
-
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(midAngle);
@@ -275,17 +325,14 @@ textarea#itemInput {
       ctx.fillText(item, 0, 0);
       ctx.restore();
     });
-
     const centerRadius = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--center-circle-radius')) || 60;
     const centerColor = getComputedStyle(document.documentElement).getPropertyValue('--center-circle-color').trim() || "#fff";
     const centerTextColor = getComputedStyle(document.documentElement).getPropertyValue('--center-text-color').trim() || "#000";
     const centerTextSize = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--center-text-size')) || 18;
-
     ctx.beginPath();
     ctx.arc(CENTER, CENTER, centerRadius, 0, 2 * Math.PI);
     ctx.fillStyle = centerColor;
     ctx.fill();
-
     if (resultText) {
       ctx.font = `${centerTextSize}px ${fontFamily}`;
       ctx.fillStyle = centerTextColor;
@@ -294,31 +341,25 @@ textarea#itemInput {
       ctx.fillText(resultText, CENTER, CENTER);
     }
   }
-  
   function stop() {
       spinningSound.pause();
       spinningSound.currentTime = 0;
       slowingSound.play();
       stopping = true;
   }
-
   function spin() {
     if (spinning) return;
-
-    spinBtn.disabled = true; // ボタンを無効化
-    spinningSound.play(); // 回転音を再生
-
+    spinBtn.disabled = true;
+    deleteModeBtn.disabled = true;
+    spinningSound.play();
     velocity = 0.3 + Math.random() * 0.2;
     spinning = true;
     stopping = false;
     resultText = "";
-    
-    // 5秒後に停止処理を開始
-    setTimeout(stop, 5000); 
-
+    selectedIndex = null;
+    setTimeout(stop, 5000);
     animateSpin();
   }
-
   function animateSpin() {
     if (!spinning) return;
     angle += velocity;
@@ -334,19 +375,22 @@ textarea#itemInput {
     drawWheel();
     requestAnimationFrame(animateSpin);
   }
-
   function determineResult() {
     slowingSound.pause();
     slowingSound.currentTime = 0;
-    winSound.play(); // 当たり音を再生
-
+    winSound.play();
     const step = (2 * Math.PI) / items.length;
     let adjustedAngle = (2 * Math.PI - (angle % (2 * Math.PI))) % (2 * Math.PI);
-    const selectedIndex = Math.floor(adjustedAngle / step) % items.length;
+    selectedIndex = Math.floor(adjustedAngle / step) % items.length;
     resultText = items[selectedIndex];
+    deleteModeBtn.disabled = false;
+
+    history.unshift(resultText);
+    saveHistory();
+    updateHistory();
+
     flashEffect(selectedIndex);
   }
-
   function flashEffect(index) {
     let flashCount = 0;
     const interval = setInterval(() => {
@@ -355,20 +399,18 @@ textarea#itemInput {
       if (flashCount > 6) {
         clearInterval(interval);
         drawWheel();
-        spinBtn.disabled = false; // ボタンを有効化
+        spinBtn.disabled = false;
       }
     }, 200);
   }
-
   addBtn.addEventListener('click', addItemsFromInput);
   spinBtn.addEventListener('click', spin);
-
   wheel.width = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--wheel-size'));
   wheel.height = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--wheel-size'));
   updateList();
+  updateHistory();
   drawWheel();
 })();
 </script>
-
 </body>
 </html>
